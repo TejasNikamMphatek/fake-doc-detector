@@ -7,12 +7,7 @@ NORMALIZED_DIR = Path("storage/normalized")
 NORMALIZED_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def convert_pdf_to_images(pdf_path: Path, dpi: int = 300):
-    """
-    Convert PDF into high-quality PNG images (300 DPI).
-    Returns list of image paths.
-    """
-
+def convert_pdf_to_images(pdf_path: Path, dpi: int = 600):
     pages = convert_from_path(
         pdf_path=str(pdf_path),
         dpi=dpi,
