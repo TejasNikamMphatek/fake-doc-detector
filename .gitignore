@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environment
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+
+# Storage (uploaded/generated files)
+storage/uploads/
+storage/normalized/
+
+# Logs
+*.log
