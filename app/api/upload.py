@@ -5,11 +5,20 @@ import uuid
 
 from app.services.pdf_normalization_service import convert_pdf_to_images
 from app.utils.file_signature_validator import validate_file_signature
+from app.services.image_preprocessing_service import ImagePreprocessingService
+
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
+preprocessor = ImagePreprocessingService()
+
 UPLOAD_DIR = Path("storage/uploads")
+NORMALIZED_DIR = Path("storage/normalized")
+PROCESSED_DIR = Path("storage/processed")
+
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+NORMALIZED_DIR.mkdir(parents=True, exist_ok=True)
+PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
 MAX_FILE_SIZE_MB = 20
 
@@ -27,7 +36,7 @@ def calculate_sha256(file_path: Path) -> str:
 @router.post("/upload")
 async def upload_document(file: UploadFile = File(...)):
 
-    # Read file
+    # Read uploaded file
     contents = await file.read()
 
     # Validate magic byte signature
@@ -51,20 +60,35 @@ async def upload_document(file: UploadFile = File(...)):
     # Generate unique filename
     unique_filename = f"{uuid.uuid4().hex}_{file.filename}"
 
-    # Save file
     file_path = UPLOAD_DIR / unique_filename
 
+    # Save file
     with open(file_path, "wb") as buffer:
         buffer.write(contents)
 
-    # Generate SHA256
+    # Generate SHA256 hash
     file_hash = calculate_sha256(file_path)
 
-    # Convert PDF → images
+    # Normalize PDF → Images
     if detected_type == "application/pdf":
         image_paths = convert_pdf_to_images(file_path)
     else:
         image_paths = [str(file_path)]
+
+    # Preprocess images
+    processed_images = []
+
+    for img_path in image_paths:
+
+        img_name = Path(img_path).stem
+        processed_output = PROCESSED_DIR / f"{img_name}_processed.png"
+
+        processed_path = preprocessor.preprocess(
+            image_path=img_path,
+            output_path=str(processed_output)
+        )
+
+        processed_images.append(processed_path)
 
     return {
         "filename": unique_filename,
@@ -72,5 +96,6 @@ async def upload_document(file: UploadFile = File(...)):
         "sha256": file_hash,
         "pages": len(image_paths),
         "normalized_images": image_paths,
-        "message": "File uploaded and normalized successfully"
+        "processed_images": processed_images,
+        "message": "File uploaded, normalized, and preprocessed successfully"
     }
