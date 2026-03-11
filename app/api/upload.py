@@ -3,22 +3,14 @@ from pathlib import Path
 import hashlib
 import uuid
 
-from app.services.pdf_normalization_service import convert_pdf_to_images
 from app.utils.file_signature_validator import validate_file_signature
-from app.services.image_preprocessing_service import ImagePreprocessingService
-
-
+from app.tasks.document_tasks import process_document
+from celery.result import AsyncResult
+from app.worker.celery_worker import celery_app
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
-preprocessor = ImagePreprocessingService()
-
 UPLOAD_DIR = Path("storage/uploads")
-NORMALIZED_DIR = Path("storage/normalized")
-PROCESSED_DIR = Path("storage/processed")
-
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-NORMALIZED_DIR.mkdir(parents=True, exist_ok=True)
-PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
 MAX_FILE_SIZE_MB = 20
 
@@ -36,66 +28,64 @@ def calculate_sha256(file_path: Path) -> str:
 @router.post("/upload")
 async def upload_document(file: UploadFile = File(...)):
 
-    # Read uploaded file
     contents = await file.read()
 
-    # Validate magic byte signature
     is_valid, detected_type = validate_file_signature(contents)
 
     if not is_valid:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid file signature detected: {detected_type}"
+            detail="Invalid file type"
         )
 
-    # Validate file size
     size_mb = len(contents) / (1024 * 1024)
 
     if size_mb > MAX_FILE_SIZE_MB:
         raise HTTPException(
             status_code=400,
-            detail="File too large (max 20MB)"
+            detail="File too large"
         )
 
-    # Generate unique filename
     unique_filename = f"{uuid.uuid4().hex}_{file.filename}"
-
     file_path = UPLOAD_DIR / unique_filename
 
-    # Save file
     with open(file_path, "wb") as buffer:
         buffer.write(contents)
 
-    # Generate SHA256 hash
     file_hash = calculate_sha256(file_path)
 
-    # Normalize PDF → Images
-    if detected_type == "application/pdf":
-        image_paths = convert_pdf_to_images(file_path)
-    else:
-        image_paths = [str(file_path)]
-
-    # Preprocess images
-    processed_images = []
-
-    for img_path in image_paths:
-
-        img_name = Path(img_path).stem
-        processed_output = PROCESSED_DIR / f"{img_name}_processed.png"
-
-        processed_path = preprocessor.preprocess(
-            image_path=img_path,
-            output_path=str(processed_output)
-        )
-
-        processed_images.append(processed_path)
+    # Send task to Celery
+    task = process_document.delay(str(file_path), detected_type)
 
     return {
         "filename": unique_filename,
-        "size_mb": round(size_mb, 2),
         "sha256": file_hash,
-        "pages": len(image_paths),
-        "normalized_images": image_paths,
-        "processed_images": processed_images,
-        "message": "File uploaded, normalized, and preprocessed successfully"
+        "task_id": task.id,
+        "message": "File uploaded. Processing started in background."
     }
+
+
+
+
+
+
+@router.get("/task/{task_id}")
+def get_task_status(task_id: str):
+
+    task_result = AsyncResult(task_id, app=celery_app)
+
+    response = {
+        "task_id": task_id,
+        "status": task_result.status
+    }
+
+    if task_result.status == "SUCCESS":
+        response["result"] = task_result.result
+
+    elif task_result.status == "FAILURE":
+        response["error"] = str(task_result.result)
+
+    elif task_result.status == "PROCESSING":
+        response["progress"] = task_result.info
+
+    return response
