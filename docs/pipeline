@@ -1,0 +1,33 @@
+Upload Document
+       │
+       ▼
+Magic Byte Validation
+       │
+       ▼
+File Size Validation
+       │
+       ▼
+Malware Scan (ClamAV)
+       │
+       ▼
+SHA256 Hash
+       │
+       ▼
+PDF → Image Normalization
+       │
+       ▼
+Image Preprocessing
+(OpenCV)
+       │
+       ▼
+OCR Extraction
+(Tesseract / PaddleOCR)
+       │
+       ▼
+Fraud Detection
+       │
+       ▼
+Fraud Score
+       │
+       ▼
+Store Result

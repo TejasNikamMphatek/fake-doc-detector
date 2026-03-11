@@ -1,0 +1,22 @@
+                Client
+                  │
+                  ▼
+             FastAPI API
+                  │
+                  ▼
+               Redis
+          (Task Queue)
+                  │
+        ┌─────────┴─────────┐
+        ▼                   ▼
+   Celery Worker 1     Celery Worker 2
+        │                   │
+        ├─ PDF normalize    ├─ OCR
+        ├─ preprocessing    ├─ fraud detection
+        └─ hashing          └─ result generation
+                  │
+                  ▼
+              Database
+                  │
+                  ▼
+             Result API
